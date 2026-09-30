@@ -1,15 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import AppointmentCard from "@/src/components/appointments/AppointmentCard";
+import { getOrCreateVisitForAppointment } from "@/lib/clinical-visits";
 import { supabase } from "@/lib/supabase";
 import type { AppointmentDetailRecord, AppointmentStatus } from "@/types/appointment";
 import type { Patient } from "@/types/patient";
 
 export default function AppointmentDetailPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const appointmentId = Array.isArray(params.id) ? params.id[0] : params.id;
   const hasValidAppointmentId = Boolean(
     appointmentId &&
@@ -19,6 +21,7 @@ export default function AppointmentDetailPage() {
   const [patient, setPatient] = useState<Patient | null>(null);
   const [isLoading, setIsLoading] = useState(hasValidAppointmentId);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isStartingVisit, setIsStartingVisit] = useState(false);
   const [error, setError] = useState(
     hasValidAppointmentId ? "" : "Invalid appointment ID.",
   );
@@ -132,6 +135,30 @@ export default function AppointmentDetailPage() {
     setIsUpdating(false);
   }
 
+  async function handleStartVisit() {
+    if (!appointment?.patient_id) {
+      setError("This appointment has no linked patient.");
+      return;
+    }
+
+    setError("");
+    setIsStartingVisit(true);
+    const result = await getOrCreateVisitForAppointment(
+      supabase,
+      appointment.patient_id,
+      appointment.id,
+    );
+
+    if (result.error || !result.visitId) {
+      console.error("Appointment visit start failed:", result.error);
+      setError(result.error ?? "Visit could not be opened.");
+      setIsStartingVisit(false);
+      return;
+    }
+
+    router.push(`/doctor/visits/${result.visitId}`);
+  }
+
   return (
     <section className="mx-auto w-full max-w-5xl px-5 py-8 sm:px-8 lg:px-10 lg:py-10">
       <Link
@@ -177,6 +204,8 @@ export default function AppointmentDetailPage() {
             patient={patient}
             isUpdating={isUpdating}
             onStatusChange={handleStatusChange}
+            isStartingVisit={isStartingVisit}
+            onStartVisit={handleStartVisit}
           />
         </div>
       )}

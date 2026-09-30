@@ -29,27 +29,34 @@ export type Visit = {
   updated_at: string;
 };
 
-export type PrescriptionItem = {
+export type Prescription = {
   id: string;
   visit_id: string;
   patient_id: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PrescriptionItem = {
+  id: string;
+  prescription_id: string;
+  medicine_id: string | number | null;
   medicine_name: string;
   dosage: string | null;
   frequency: string | null;
   duration: string | null;
   instructions: string | null;
   created_at: string;
-  updated_at: string;
 };
 
-export type PrescriptionDraft = Pick<
-  PrescriptionItem,
-  "medicine_name" | "dosage" | "frequency" | "duration" | "instructions"
->;
+export type PrescriptionDraft = Omit<PrescriptionItem, "id" | "prescription_id" | "created_at">;
 
 export type VisitPrescriptionSummary = {
   id: string;
   visit_date: string;
   diagnosis: string | null;
-  prescriptions: Pick<PrescriptionItem, "id" | "medicine_name">[];
+  prescriptions: Array<{
+    id: string;
+    prescription_items: Pick<PrescriptionItem, "id" | "medicine_name">[];
+  }>;
 };

@@ -27,7 +27,7 @@ export default function PatientPrescriptionsSection({
       const { data, error: fetchError } = await supabase
         .from("visits")
         .select(
-          "id, visit_date, diagnosis, prescriptions(id, medicine_name)",
+          "id, visit_date, diagnosis, prescriptions(id, prescription_items(id, medicine_name))",
         )
         .eq("patient_id", patientId)
         .order("visit_date", { ascending: false });
@@ -42,7 +42,11 @@ export default function PatientPrescriptionsSection({
       } else {
         const visitsWithPrescriptions = (data ?? []) as VisitPrescriptionSummary[];
         setVisits(
-          visitsWithPrescriptions.filter((visit) => visit.prescriptions.length > 0),
+          visitsWithPrescriptions.filter((visit) =>
+            visit.prescriptions.some(
+              (prescription) => prescription.prescription_items.length > 0,
+            ),
+          ),
         );
       }
       setIsLoading(false);
@@ -83,9 +87,11 @@ export default function PatientPrescriptionsSection({
                 </time>
               </div>
               <ul className="mt-3 space-y-1 text-sm text-slate-700">
-                {visit.prescriptions.map((prescription) => (
-                  <li key={prescription.id}>{prescription.medicine_name}</li>
-                ))}
+                {visit.prescriptions.flatMap((prescription) =>
+                  prescription.prescription_items.map((item) => (
+                    <li key={item.id}>{item.medicine_name}</li>
+                  )),
+                )}
               </ul>
               <Link
                 href={`/doctor/visits/${visit.id}`}

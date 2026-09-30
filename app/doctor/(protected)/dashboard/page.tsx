@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
@@ -15,34 +16,39 @@ type Appointment = {
 
 const workspaceSections = [
   {
+    title: "Appointments",
+    description: "Review bookings and manage appointment status.",
+    href: "/doctor/appointments",
+  },
+  {
     title: "Patients",
-    description: "Patient records will be available here.",
-    accent: "bg-blue-50 text-blue-700",
+    description: "Browse patient records and open clinical profiles.",
+    href: "/doctor/patients",
   },
   {
     title: "Online Requests",
-    description: "Online consultation requests will appear here.",
-    accent: "bg-violet-50 text-violet-700",
+    description: "Review online consultation requests from patients.",
+    href: "/doctor/online-requests",
   },
   {
     title: "Visits",
-    description: "Visit history will be available here.",
-    accent: "bg-emerald-50 text-emerald-700",
+    description: "Open clinical visits and patient encounter notes.",
+    href: "/doctor/visits",
   },
   {
     title: "Prescriptions",
-    description: "Prescription management will be added here.",
-    accent: "bg-amber-50 text-amber-700",
+    description: "Review prescriptions organized by clinical visit.",
+    href: "/doctor/prescriptions",
   },
   {
     title: "Ledger",
-    description: "Financial records will be available here.",
-    accent: "bg-rose-50 text-rose-700",
+    description: "Review clinic ledger records.",
+    href: "/doctor/ledger",
   },
   {
     title: "Settings",
-    description: "Portal preferences will be managed here.",
-    accent: "bg-slate-100 text-slate-700",
+    description: "Manage clinic portal preferences.",
+    href: "/doctor/settings",
   },
 ];
 
@@ -110,8 +116,7 @@ export default function DoctorDashboardPage() {
           Dashboard
         </h2>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
-          A central workspace for managing your clinic responsibilities. The
-          portal sections are ready for their future data connections.
+          A central workspace for appointments, patient records, and clinic operations.
         </p>
       </header>
 
@@ -205,24 +210,23 @@ export default function DoctorDashboardPage() {
         </h3>
       </div>
 
-      <div className="grid gap-5 pt-8 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid auto-rows-fr gap-5 pt-8 sm:grid-cols-2 xl:grid-cols-3">
         {workspaceSections.map((section) => (
-          <article
+          <Link
             key={section.title}
-            className="min-h-44 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+            href={section.href}
+            className="group flex h-full min-h-44 flex-col rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-cyan-200 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-600 focus-visible:ring-offset-2"
           >
-            <div
-              className={`inline-flex rounded-lg px-3 py-1.5 text-xs font-semibold ${section.accent}`}
-            >
-              Portal section
-            </div>
-            <h3 className="mt-5 text-lg font-semibold text-slate-950">
+            <h3 className="text-lg font-semibold text-slate-950 group-hover:text-cyan-800">
               {section.title}
             </h3>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
+            <p className="mt-2 flex-1 text-sm leading-6 text-slate-600">
               {section.description}
             </p>
-          </article>
+            <span className="mt-5 text-sm font-semibold text-cyan-700">
+              Open section
+            </span>
+          </Link>
         ))}
       </div>
     </section>

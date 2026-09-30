@@ -20,6 +20,12 @@ function formatDateTime(date: string) {
   }).format(new Date(date));
 }
 
+function toLocalDateTimeValue(date: string) {
+  const parsed = new Date(date);
+  const localDate = new Date(parsed.getTime() - parsed.getTimezoneOffset() * 60_000);
+  return localDate.toISOString().slice(0, 16);
+}
+
 export default function VisitDetailPage() {
   const params = useParams<{ id: string }>();
   const visitId = Array.isArray(params.id) ? params.id[0] : params.id;
@@ -93,7 +99,7 @@ export default function VisitDetailPage() {
 
       setVisit(loadedVisit);
       setForm({
-        visit_date: loadedVisit.visit_date,
+        visit_date: toLocalDateTimeValue(loadedVisit.visit_date),
         visit_type: loadedVisit.visit_type ?? "",
         chief_complaint: loadedVisit.chief_complaint ?? "",
         diagnosis: loadedVisit.diagnosis ?? "",
@@ -286,7 +292,7 @@ export default function VisitDetailPage() {
                   disabled={isSaving}
                   onClick={() => {
                     setForm({
-                      visit_date: visit.visit_date,
+                      visit_date: toLocalDateTimeValue(visit.visit_date),
                       visit_type: visit.visit_type ?? "",
                       chief_complaint: visit.chief_complaint ?? "",
                       diagnosis: visit.diagnosis ?? "",

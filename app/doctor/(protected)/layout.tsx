@@ -5,6 +5,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import LogoutButton from "@/components/doctor/LogoutButton";
 
 const navigationItems = [
+  { label: "Dashboard", shortLabel: "Dashboard", href: "/doctor/dashboard" },
   { label: "Appointments", shortLabel: "Appointments", href: "/doctor/appointments" },
   { label: "Patients", shortLabel: "Patients", href: "/doctor/patients" },
   { label: "Online Requests", shortLabel: "Online Requests", href: "/doctor/online-requests" },

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import PatientTable from "@/src/components/patients/PatientTable";
 import { supabase } from "@/lib/supabase";
 import type { Patient } from "@/types/patient";
@@ -64,7 +65,8 @@ export default function PatientsPage() {
 
   return (
     <section className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8 lg:px-10 lg:py-10">
-      <header className="border-b border-slate-200 pb-8">
+      <header className="flex flex-wrap items-end justify-between gap-5 border-b border-slate-200 pb-8">
+        <div>
         <p className="text-sm font-semibold uppercase tracking-[0.18em] text-cyan-700">
           Doctor workspace
         </p>
@@ -74,6 +76,13 @@ export default function PatientsPage() {
         <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
           Review patient records connected to your clinic workspace.
         </p>
+        </div>
+        <Link
+          href="/doctor/patients/new"
+          className="rounded-lg bg-cyan-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-cyan-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-600 focus-visible:ring-offset-2"
+        >
+          Add Patient
+        </Link>
       </header>
 
       <section className="mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">

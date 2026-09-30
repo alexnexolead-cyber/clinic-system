@@ -9,6 +9,8 @@ type AppointmentCardProps = {
   patient: Patient | null;
   isUpdating: boolean;
   onStatusChange: (status: AppointmentStatus) => void;
+  isStartingVisit: boolean;
+  onStartVisit: () => void;
 };
 
 function statusClasses(status: AppointmentDetailRecord["status"]) {
@@ -42,6 +44,8 @@ export default function AppointmentCard({
   patient,
   isUpdating,
   onStatusChange,
+  isStartingVisit,
+  onStartVisit,
 }: AppointmentCardProps) {
   return (
     <div className="grid gap-8 lg:grid-cols-2">
@@ -125,6 +129,14 @@ export default function AppointmentCard({
         </dl>
 
         <div className="mt-8 flex flex-wrap gap-3 border-t border-slate-200 pt-5">
+          <button
+            type="button"
+            onClick={onStartVisit}
+            disabled={isStartingVisit || !appointment.patient_id}
+            className="rounded-lg bg-cyan-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-cyan-800 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isStartingVisit ? "Opening visit..." : "Start Visit"}
+          </button>
           <button
             type="button"
             onClick={() => onStatusChange("confirmed")}
