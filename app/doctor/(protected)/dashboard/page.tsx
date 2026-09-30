@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
@@ -77,6 +78,7 @@ function formatAppointmentDate(date: string) {
 }
 
 export default function DoctorDashboardPage() {
+  const router = useRouter();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [todayAppointmentCount, setTodayAppointmentCount] = useState<number | null>(null);
   const [metrics, setMetrics] = useState<DashboardMetrics>({
@@ -157,9 +159,11 @@ export default function DoctorDashboardPage() {
       if (ledger.error) errors.ledgerBalance = ledger.error.message;
       const ledgerBalance = ledger.error
         ? null
-        : (ledger.data ?? []).reduce((balance, entry) =>
-            balance + (entry.entry_type === "charge" ? Number(entry.amount) : -Number(entry.amount)),
-          0);
+        : (ledger.data ?? []).reduce((balance, entry) => {
+            const val = Number(entry.amount);
+            const safeAmount = Number.isFinite(val) ? val : 0;
+            return balance + (entry.entry_type === "charge" ? safeAmount : -safeAmount);
+          }, 0);
 
       setMetricErrors(errors);
       setMetrics({
@@ -197,7 +201,8 @@ export default function DoctorDashboardPage() {
   }
 
   function formatAmount(amount: number) {
-    return amount.toLocaleString("en-US", {
+    const safe = Number.isFinite(amount) ? amount : 0;
+    return safe.toLocaleString("en-US", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
@@ -279,11 +284,16 @@ export default function DoctorDashboardPage() {
               return (
               <article
                 key={appointment.id}
-                className="grid grid-cols-2 gap-x-4 gap-y-4 px-4 py-4 sm:grid-cols-3 sm:gap-5 sm:px-6 sm:py-5 xl:grid-cols-[1.2fr_1fr_1fr_1fr_0.8fr] xl:items-center"
+                onClick={() => router.push(`/doctor/appointments/${appointment.id}`)}
+                className="group cursor-pointer grid grid-cols-2 gap-x-4 gap-y-4 px-4 py-4 transition-colors hover:bg-cyan-50/30 sm:grid-cols-3 sm:gap-5 sm:px-6 sm:py-5 xl:grid-cols-[1.2fr_1fr_1fr_1fr_0.8fr_auto] xl:items-center"
               >
                 <div>
                   {appointment.patient_id ? (
-                    <Link href={`/doctor/patients/${appointment.patient_id}`} className="text-sm font-semibold text-slate-950 hover:text-cyan-800">
+                    <Link
+                      href={`/doctor/patients/${appointment.patient_id}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-sm font-semibold text-slate-950 hover:text-cyan-800"
+                    >
                       {patientName || "Patient"}
                     </Link>
                   ) : <p className="text-sm font-semibold text-slate-950">{patientName || "Patient"}</p>}
@@ -319,6 +329,11 @@ export default function DoctorDashboardPage() {
                 <div>
                   <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold capitalize text-slate-700">
                     {appointment.status}
+                  </span>
+                </div>
+                <div className="col-span-2 sm:col-span-3 xl:col-span-1 flex justify-end">
+                  <span className="text-xs font-semibold text-cyan-700 group-hover:text-cyan-900">
+                    Details &rarr;
                   </span>
                 </div>
               </article>

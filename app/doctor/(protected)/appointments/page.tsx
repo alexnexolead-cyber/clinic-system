@@ -24,9 +24,20 @@ export default function AppointmentsPage() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<AppointmentFilter>("all");
   const [sort, setSort] = useState<AppointmentSort>("date");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [pageSize, setPageSize] = useState<PageSize>(10);
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
+
+  function handleColumnSort(field: AppointmentSort) {
+    if (sort === field) {
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSort(field);
+      setSortDirection("asc");
+    }
+    setCurrentPage(1);
+  }
   const [busyAppointmentId, setBusyAppointmentId] = useState<string | null>(null);
   const [error, setError] = useState("");
 
@@ -104,18 +115,23 @@ export default function AppointmentsPage() {
     });
 
     return [...filtered].sort((left, right) => {
+      let comparison = 0;
       if (sort === "name") {
         const leftPatient = getPatientIdentity(left);
         const rightPatient = getPatientIdentity(right);
         const leftName = [leftPatient?.first_name ?? left.first_name, leftPatient?.last_name ?? left.last_name].join(" ");
         const rightName = [rightPatient?.first_name ?? right.first_name, rightPatient?.last_name ?? right.last_name].join(" ");
-        return leftName.localeCompare(rightName);
+        comparison = leftName.localeCompare(rightName);
+      } else if (sort === "status") {
+        comparison = left.status.localeCompare(right.status);
+      } else if (sort === "type") {
+        comparison = left.appointment_type.localeCompare(right.appointment_type);
+      } else {
+        comparison = left.preferred_date.localeCompare(right.preferred_date);
       }
-      if (sort === "status") return left.status.localeCompare(right.status);
-      if (sort === "type") return left.appointment_type.localeCompare(right.appointment_type);
-      return left.preferred_date.localeCompare(right.preferred_date);
+      return sortDirection === "asc" ? comparison : -comparison;
     });
-  }, [appointments, filter, search, sort]);
+  }, [appointments, filter, search, sort, sortDirection]);
 
   const totalPages = Math.max(1, Math.ceil(filteredAppointments.length / pageSize));
   const visibleAppointments = filteredAppointments.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -236,6 +252,9 @@ export default function AppointmentsPage() {
             <AppointmentTable
               appointments={visibleAppointments}
               busyAppointmentId={busyAppointmentId}
+              sortField={sort}
+              sortDirection={sortDirection}
+              onSort={handleColumnSort}
               onStatusChange={updateAppointmentStatus}
               onStartVisit={startVisit}
               onViewVisit={viewVisit}

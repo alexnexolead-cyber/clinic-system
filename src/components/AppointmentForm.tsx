@@ -451,16 +451,60 @@ function AppointmentForm() {
         </label>
       </div>
 
-      {lastSubmittedAppointmentType === "Online Consultation" && (
-        <div role="note" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
-          <p>Your booking form has been submitted successfully.</p>
-          <p className="mt-2">
-            Your appointment confirmation will only be completed after you send your payment screenshot on WhatsApp:{" "}
-            <a href="https://wa.me/923001234567" target="_blank" rel="noreferrer" className="inline-block whitespace-nowrap font-bold text-emerald-800 underline underline-offset-2">
+      {formData.appointmentType === "Online Consultation" && (
+        <div className="rounded-lg border border-cyan-200 bg-cyan-50/80 p-3.5 text-xs sm:text-sm text-cyan-950 leading-relaxed sm:col-span-2">
+          <p className="font-semibold text-cyan-900">Payment confirmation notice:</p>
+          <p className="mt-1">
+            Booking request will submit successfully, but appointment confirmation will only happen after patient sends payment screenshot on WhatsApp number{" "}
+            <a
+              href="https://wa.me/923001234567"
+              target="_blank"
+              rel="noreferrer"
+              className="font-bold text-emerald-800 underline underline-offset-2"
+            >
               03001234567
             </a>.
           </p>
-          <p className="mt-2">After payment verification, your booking confirmation message will be sent to your WhatsApp number.</p>
+          <p className="mt-1 text-slate-700">
+            After verification, confirmation message will be sent on patient&apos;s WhatsApp.
+          </p>
+        </div>
+      )}
+
+      {lastSubmittedAppointmentType === "Online Consultation" && (
+        <div role="note" className="rounded-xl border border-emerald-200 bg-emerald-50/90 p-4 sm:p-5 text-sm leading-6 text-emerald-950 shadow-sm">
+          <div className="flex items-center gap-2 text-emerald-900 font-semibold">
+            <svg className="h-5 w-5 text-emerald-700 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+            <span>Booking Request Submitted Successfully</span>
+          </div>
+          <div className="mt-3 space-y-2 text-emerald-950">
+            <p>
+              Booking request has been submitted successfully, but appointment confirmation will only happen after patient sends payment screenshot on WhatsApp number{" "}
+              <a
+                href="https://wa.me/923001234567"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-block whitespace-nowrap font-bold text-emerald-800 underline underline-offset-2"
+              >
+                03001234567
+              </a>.
+            </p>
+            <p>
+              After verification, confirmation message will be sent on patient&apos;s WhatsApp.
+            </p>
+          </div>
+          <div className="mt-4">
+            <a
+              href="https://wa.me/923001234567?text=Hello%2C%20I%20have%20submitted%20an%20online%20consultation%20booking%20and%20here%20is%20my%20payment%20screenshot."
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-800"
+            >
+              <span>Send Screenshot on WhatsApp (03001234567)</span>
+            </a>
+          </div>
         </div>
       )}
 

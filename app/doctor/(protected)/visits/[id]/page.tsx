@@ -184,13 +184,22 @@ export default function VisitDetailPage() {
     .join(" ") || "-";
 
   return (
-    <section className="mx-auto w-full max-w-6xl px-5 py-8 sm:px-8 lg:px-10 lg:py-10">
-      <Link
-        href={patient ? `/doctor/patients/${patient.id}` : "/doctor/patients"}
-        className="text-sm font-semibold text-cyan-700 transition hover:text-cyan-900"
-      >
-        Back to patient profile
-      </Link>
+    <section className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
+      <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-sm text-slate-500">
+        <Link
+          href="/doctor/visits"
+          className="font-medium text-cyan-700 transition hover:text-cyan-900 inline-flex items-center gap-1"
+        >
+          ← Back to visits
+        </Link>
+        <span aria-hidden="true" className="text-slate-300">|</span>
+        <Link
+          href={patient ? `/doctor/patients/${patient.id}` : "/doctor/patients"}
+          className="font-medium text-slate-600 transition hover:text-cyan-900 truncate"
+        >
+          Patient Profile ({patientName})
+        </Link>
+      </nav>
 
       {isLoading && <p className="py-12 text-sm text-slate-600">Loading visit...</p>}
       {!isLoading && error && !visit && (
@@ -198,28 +207,58 @@ export default function VisitDetailPage() {
       )}
       {!isLoading && visit && patient && (
         <>
-          <header className="mt-6 flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 pb-7">
+          <header className="mt-5 flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 pb-6">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-cyan-700">
-                Visit · {patient.patient_code ?? "-"}
-              </p>
-              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
+              <div className="flex items-center gap-2.5">
+                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-cyan-700">
+                  Visit · {patient.patient_code ?? "No Code"}
+                </p>
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                    visit.status === "completed"
+                      ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                      : "bg-amber-50 text-amber-800 border border-amber-200"
+                  }`}
+                >
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${
+                      visit.status === "completed" ? "bg-emerald-500" : "bg-amber-500"
+                    }`}
+                  />
+                  {visit.status === "completed" ? "Completed" : "In Progress"}
+                </span>
+              </div>
+              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
                 {patientName}
               </h1>
-              <p className="mt-2 text-sm text-slate-600">
-                {patient.phone ?? "-"} · {formatDateTime(visit.visit_date)} ·{" "}
-                <span className="capitalize">{visit.status.replaceAll("_", " ")}</span>
+              <p className="mt-1.5 text-sm text-slate-600">
+                {patient.phone ?? "No phone"} · {formatDateTime(visit.visit_date)}
+                {visit.visit_type && (
+                  <>
+                    {" · "}
+                    <span className="capitalize">{visit.visit_type}</span>
+                  </>
+                )}
               </p>
             </div>
-            {visit.status === "in_progress" && !isEditing && (
-              <button
-                type="button"
-                onClick={() => setIsEditing(true)}
-                className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-white"
+
+            <div className="flex flex-wrap items-center gap-2.5">
+              <Link
+                href={`/doctor/visits/${visit.id}/prescription`}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
               >
-                Edit visit
-              </button>
-            )}
+                <span>Rx Prescription</span>
+              </Link>
+              {visit.status === "in_progress" && !isEditing && (
+                <button
+                  type="button"
+                  onClick={() => setIsEditing(true)}
+                  className="rounded-lg bg-cyan-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-cyan-800"
+                >
+                  Edit visit
+                </button>
+              )}
+            </div>
           </header>
 
           {error && <p className="mt-5 text-sm text-red-600" role="alert">{error}</p>}
@@ -325,7 +364,14 @@ export default function VisitDetailPage() {
                 <dl className="mt-4 grid gap-4 sm:grid-cols-2">
                 <div>
                   <dt className="text-sm text-slate-500">Patient</dt>
-                  <dd className="mt-1 font-semibold text-slate-950">{patientName}</dd>
+                  <dd className="mt-1 font-semibold text-slate-950">
+                    <Link
+                      href={`/doctor/patients/${patient.id}`}
+                      className="text-cyan-700 hover:text-cyan-900 hover:underline"
+                    >
+                      {patientName}
+                    </Link>
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-sm text-slate-500">Patient code</dt>
@@ -341,7 +387,7 @@ export default function VisitDetailPage() {
                 </div>
                 <div className="sm:col-span-2">
                   <dt className="text-sm text-slate-500">Visit type</dt>
-                  <dd className="mt-1 font-semibold text-slate-950">{visit.visit_type || "-"}</dd>
+                  <dd className="mt-1 font-semibold text-slate-950 capitalize">{visit.visit_type || "-"}</dd>
                 </div>
                 </dl>
               </section>
@@ -351,15 +397,15 @@ export default function VisitDetailPage() {
                 <dl className="mt-4 space-y-4">
                 <div className="sm:col-span-2">
                   <dt className="text-sm text-slate-500">Chief complaint</dt>
-                  <dd className="mt-1 whitespace-pre-wrap text-slate-800">{visit.chief_complaint || "-"}</dd>
+                  <dd className="mt-1 break-words whitespace-pre-wrap text-slate-800">{visit.chief_complaint || "-"}</dd>
                 </div>
                 <div className="sm:col-span-2">
                   <dt className="text-sm text-slate-500">Diagnosis</dt>
-                  <dd className="mt-1 whitespace-pre-wrap text-slate-800">{visit.diagnosis || "-"}</dd>
+                  <dd className="mt-1 break-words whitespace-pre-wrap text-slate-800">{visit.diagnosis || "-"}</dd>
                 </div>
                 <div className="sm:col-span-2">
                   <dt className="text-sm text-slate-500">Clinical notes</dt>
-                  <dd className="mt-1 whitespace-pre-wrap text-slate-800">{visit.clinical_notes || "-"}</dd>
+                  <dd className="mt-1 break-words whitespace-pre-wrap text-slate-800">{visit.clinical_notes || "-"}</dd>
                 </div>
                 </dl>
               </section>

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import PaymentStatusBadge from "@/src/components/ledger/PaymentStatusBadge";
 import PaginationControls, { type PageSize } from "@/src/components/operations/PaginationControls";
 import { supabase } from "@/lib/supabase";
@@ -21,7 +21,17 @@ type LedgerRow = LedgerEntry & {
 
 const ledgerSelect = "id, patient_id, visit_id, appointment_id, entry_type, amount, description, created_at, updated_at, patients(patient_code, first_name, last_name)";
 
-type LedgerSort = "newest" | "oldest" | "amount-high" | "amount-low";
+type LedgerSort =
+  | "newest"
+  | "oldest"
+  | "amount-high"
+  | "amount-low"
+  | "patient-asc"
+  | "patient-desc"
+  | "description-asc"
+  | "description-desc"
+  | "status-asc"
+  | "status-desc";
 
 function getPatient(entry: LedgerRow) {
   return Array.isArray(entry.patients) ? entry.patients[0] ?? null : entry.patients;
@@ -33,7 +43,8 @@ function localDateKey(value: string) {
 }
 
 function formatAmount(amount: number) {
-  return amount.toLocaleString("en-US", {
+  const safe = Number.isFinite(amount) ? amount : 0;
+  return safe.toLocaleString("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
@@ -47,6 +58,7 @@ function formatDate(date: string) {
 }
 
 export default function LedgerPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [patients, setPatients] = useState<LedgerPatient[]>([]);
   const [entries, setEntries] = useState<LedgerRow[]>([]);
@@ -98,10 +110,12 @@ export default function LedgerPage() {
 
   const totals = entries.reduce(
     (summary, entry) => {
+      const val = Number(entry.amount);
+      const safeAmount = Number.isFinite(val) ? val : 0;
       if (entry.entry_type === "charge") {
-        summary.charges += Number(entry.amount);
+        summary.charges += safeAmount;
       } else {
-        summary.payments += Number(entry.amount);
+        summary.payments += safeAmount;
       }
       return summary;
     },
@@ -110,8 +124,10 @@ export default function LedgerPage() {
   const balance = totals.charges - totals.payments;
   const patientPaymentTotals = entries.reduce((totalsByPatient, entry) => {
     const totals = totalsByPatient.get(entry.patient_id) ?? { charges: 0, paid: 0 };
-    if (entry.entry_type === "charge") totals.charges += Number(entry.amount);
-    else totals.paid += Number(entry.amount);
+    const val = Number(entry.amount);
+    const safeAmount = Number.isFinite(val) ? val : 0;
+    if (entry.entry_type === "charge") totals.charges += safeAmount;
+    else totals.paid += safeAmount;
     totalsByPatient.set(entry.patient_id, totals);
     return totalsByPatient;
   }, new Map<string, { charges: number; paid: number }>());
@@ -134,14 +150,58 @@ export default function LedgerPage() {
     });
 
     return filtered.sort((left, right) => {
-      if (sort === "amount-high") return Number(right.amount) - Number(left.amount);
-      if (sort === "amount-low") return Number(left.amount) - Number(right.amount);
+      const leftAmount = Number.isFinite(Number(left.amount)) ? Number(left.amount) : 0;
+      const rightAmount = Number.isFinite(Number(right.amount)) ? Number(right.amount) : 0;
+      if (sort === "amount-high") return rightAmount - leftAmount;
+      if (sort === "amount-low") return leftAmount - rightAmount;
+      if (sort === "patient-asc" || sort === "patient-desc") {
+        const pLeft = getPatient(left);
+        const pRight = getPatient(right);
+        const nameLeft = [pLeft?.first_name, pLeft?.last_name].filter(Boolean).join(" ");
+        const nameRight = [pRight?.first_name, pRight?.last_name].filter(Boolean).join(" ");
+        const cmp = nameLeft.localeCompare(nameRight);
+        return sort === "patient-asc" ? cmp : -cmp;
+      }
+      if (sort === "description-asc" || sort === "description-desc") {
+        const cmp = left.description.localeCompare(right.description);
+        return sort === "description-asc" ? cmp : -cmp;
+      }
+      if (sort === "status-asc" || sort === "status-desc") {
+        const stLeft = getPaymentStatus(
+          patientPaymentTotals.get(left.patient_id)?.charges ?? 0,
+          patientPaymentTotals.get(left.patient_id)?.paid ?? 0,
+        );
+        const stRight = getPaymentStatus(
+          patientPaymentTotals.get(right.patient_id)?.charges ?? 0,
+          patientPaymentTotals.get(right.patient_id)?.paid ?? 0,
+        );
+        const cmp = stLeft.localeCompare(stRight);
+        return sort === "status-asc" ? cmp : -cmp;
+      }
       const dateDifference = new Date(left.created_at).getTime() - new Date(right.created_at).getTime();
       return sort === "oldest" ? dateDifference : -dateDifference;
     });
-  }, [dateFrom, dateTo, entries, patientFilter, search, sort, typeFilter]);
+  }, [dateFrom, dateTo, entries, patientFilter, patientPaymentTotals, search, sort, typeFilter]);
   const totalPages = Math.max(1, Math.ceil(filteredEntries.length / pageSize));
   const visibleEntries = filteredEntries.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  function toggleColumnSort(field: "date" | "patient" | "description" | "status" | "amount") {
+    setSort((current) => {
+      switch (field) {
+        case "date":
+          return current === "newest" ? "oldest" : "newest";
+        case "patient":
+          return current === "patient-asc" ? "patient-desc" : "patient-asc";
+        case "description":
+          return current === "description-asc" ? "description-desc" : "description-asc";
+        case "status":
+          return current === "status-asc" ? "status-desc" : "status-asc";
+        case "amount":
+          return current === "amount-high" ? "amount-low" : "amount-high";
+      }
+    });
+    setCurrentPage(1);
+  }
 
   async function createEntry(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -184,19 +244,26 @@ export default function LedgerPage() {
 
       <section aria-label="Payment summary" className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="text-sm font-medium text-slate-600">Total Charges</h2>
-          <p className="mt-2 text-xl font-semibold text-slate-950">{formatAmount(totals.charges)}</p>
+          <h2 className="text-sm font-medium text-slate-600">Total Charges (Billed)</h2>
+          <p className="mt-2 text-2xl font-bold text-slate-950">Rs. {formatAmount(totals.charges)}</p>
+          <p className="mt-1 text-xs text-slate-500">Cumulative charges across all patients</p>
         </article>
         <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="text-sm font-medium text-slate-600">Total Paid</h2>
-          <p className="mt-2 text-xl font-semibold text-slate-950">{formatAmount(totals.payments)}</p>
+          <h2 className="text-sm font-medium text-slate-600">Total Paid (Received)</h2>
+          <p className="mt-2 text-2xl font-bold text-emerald-700">Rs. {formatAmount(totals.payments)}</p>
+          <p className="mt-1 text-xs text-slate-500">Total payments collected to date</p>
         </article>
-        <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="text-sm font-medium text-slate-600">Remaining Balance</h2>
-          <p className="mt-2 text-xl font-semibold text-slate-950">{formatAmount(Math.max(0, balance))}</p>
-          <div className="mt-3">
+        <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:col-span-2 xl:col-span-1">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-medium text-slate-600">Payment Due / Outstanding</h2>
             <PaymentStatusBadge status={getPaymentStatus(totals.charges, totals.payments)} />
           </div>
+          <p className={`mt-2 text-2xl font-bold ${balance > 0 ? "text-rose-700" : "text-emerald-700"}`}>
+            Rs. {formatAmount(Math.max(0, balance))}
+          </p>
+          <p className="mt-1 text-xs text-slate-500">
+            {balance > 0 ? "Outstanding amount due from patients" : "All charges fully settled"}
+          </p>
         </article>
       </section>
 
@@ -290,6 +357,9 @@ export default function LedgerPage() {
                 <option value="oldest">Oldest first</option>
                 <option value="amount-high">Amount: high to low</option>
                 <option value="amount-low">Amount: low to high</option>
+                <option value="patient-asc">Patient: A to Z</option>
+                <option value="patient-desc">Patient: Z to A</option>
+                <option value="status-asc">Status: A to Z</option>
               </select>
             </label>
           </div>
@@ -300,10 +370,18 @@ export default function LedgerPage() {
             {visibleEntries.map((entry) => {
               const patient = getPatient(entry);
               return (
-                <article key={entry.id} className="space-y-2 px-4 py-4">
+                <article
+                  key={entry.id}
+                  onClick={() => router.push(`/doctor/patients/${entry.patient_id}`)}
+                  className="cursor-pointer space-y-2 px-4 py-4 transition-colors hover:bg-slate-50"
+                >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <Link href={`/doctor/patients/${entry.patient_id}`} className="font-medium text-slate-950 hover:text-cyan-800">
+                      <Link
+                        href={`/doctor/patients/${entry.patient_id}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="font-medium text-slate-950 hover:text-cyan-800"
+                      >
                         {[patient?.patient_code, patient?.first_name, patient?.last_name].filter(Boolean).join(" · ") || "Patient"}
                       </Link>
                       <p className="mt-1 text-sm text-slate-700">{entry.description}</p>
@@ -318,9 +396,10 @@ export default function LedgerPage() {
                       {entry.entry_type === "charge" ? "+" : "-"}{formatAmount(Number(entry.amount))}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-500">
-                    {formatDate(entry.created_at)} · {entry.entry_type === "charge" ? "Charge" : "Payment"}
-                  </p>
+                  <div className="flex items-center justify-between text-xs text-slate-500">
+                    <span>{formatDate(entry.created_at)} · {entry.entry_type === "charge" ? "Charge" : "Payment"}</span>
+                    <span className="font-medium text-cyan-700">View profile &rarr;</span>
+                  </div>
                 </article>
               );
             })}
@@ -329,22 +408,80 @@ export default function LedgerPage() {
             <table className="min-w-full text-left text-sm">
               <thead className="sticky top-0 z-10 bg-slate-50 text-xs uppercase text-slate-500">
                 <tr>
-                  <th className="px-5 py-3 font-semibold">Date</th>
-                  <th className="px-5 py-3 font-semibold">Patient</th>
-                  <th className="px-5 py-3 font-semibold">Description</th>
+                  <th className="px-5 py-3 font-semibold">
+                    <button
+                      type="button"
+                      onClick={() => toggleColumnSort("date")}
+                      className="inline-flex items-center gap-1 font-semibold uppercase hover:text-cyan-800"
+                    >
+                      Date
+                      {sort === "newest" && <span>&darr;</span>}
+                      {sort === "oldest" && <span>&uarr;</span>}
+                    </button>
+                  </th>
+                  <th className="px-5 py-3 font-semibold">
+                    <button
+                      type="button"
+                      onClick={() => toggleColumnSort("patient")}
+                      className="inline-flex items-center gap-1 font-semibold uppercase hover:text-cyan-800"
+                    >
+                      Patient
+                      {sort === "patient-asc" && <span>&uarr;</span>}
+                      {sort === "patient-desc" && <span>&darr;</span>}
+                    </button>
+                  </th>
+                  <th className="px-5 py-3 font-semibold">
+                    <button
+                      type="button"
+                      onClick={() => toggleColumnSort("description")}
+                      className="inline-flex items-center gap-1 font-semibold uppercase hover:text-cyan-800"
+                    >
+                      Description
+                      {sort === "description-asc" && <span>&uarr;</span>}
+                      {sort === "description-desc" && <span>&darr;</span>}
+                    </button>
+                  </th>
                   <th className="px-5 py-3 font-semibold">Type</th>
-                  <th className="px-5 py-3 font-semibold">Payment status</th>
-                  <th className="px-5 py-3 text-right font-semibold">Amount</th>
+                  <th className="px-5 py-3 font-semibold">
+                    <button
+                      type="button"
+                      onClick={() => toggleColumnSort("status")}
+                      className="inline-flex items-center gap-1 font-semibold uppercase hover:text-cyan-800"
+                    >
+                      Payment status
+                      {sort === "status-asc" && <span>&uarr;</span>}
+                      {sort === "status-desc" && <span>&darr;</span>}
+                    </button>
+                  </th>
+                  <th className="px-5 py-3 text-right font-semibold">
+                    <button
+                      type="button"
+                      onClick={() => toggleColumnSort("amount")}
+                      className="inline-flex items-center gap-1 font-semibold uppercase hover:text-cyan-800"
+                    >
+                      Amount
+                      {sort === "amount-high" && <span>&darr;</span>}
+                      {sort === "amount-low" && <span>&uarr;</span>}
+                    </button>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {visibleEntries.map((entry) => {
                   const patient = getPatient(entry);
                   return (
-                    <tr key={entry.id} className="transition-colors hover:bg-slate-50">
+                    <tr
+                      key={entry.id}
+                      onClick={() => router.push(`/doctor/patients/${entry.patient_id}`)}
+                      className="cursor-pointer transition-colors hover:bg-cyan-50/30"
+                    >
                       <td className="whitespace-nowrap px-5 py-4 text-slate-600">{formatDate(entry.created_at)}</td>
                       <td className="whitespace-nowrap px-5 py-4 font-medium text-slate-900">
-                        <Link href={`/doctor/patients/${entry.patient_id}`} className="hover:text-cyan-800">
+                        <Link
+                          href={`/doctor/patients/${entry.patient_id}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="hover:text-cyan-800"
+                        >
                           {[patient?.patient_code, patient?.first_name, patient?.last_name].filter(Boolean).join(" · ") || "Patient"}
                         </Link>
                       </td>

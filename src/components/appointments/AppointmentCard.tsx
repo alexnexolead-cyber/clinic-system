@@ -214,16 +214,22 @@ export default function AppointmentCard({
         {!isLoadingPayment && !paymentError && paymentSummary && (
           <dl className="mt-4 grid gap-4 sm:grid-cols-3">
             <div>
-              <dt className="text-sm text-slate-500">Total Charges</dt>
-              <dd className="mt-1 font-semibold text-slate-950">{paymentSummary.totalCharges.toFixed(2)}</dd>
+              <dt className="text-sm text-slate-500">Total Charges (Billed)</dt>
+              <dd className="mt-1 font-semibold text-slate-950">
+                Rs. {(Number.isFinite(paymentSummary.totalCharges) ? paymentSummary.totalCharges : 0).toFixed(2)}
+              </dd>
             </div>
             <div>
-              <dt className="text-sm text-slate-500">Total Paid</dt>
-              <dd className="mt-1 font-semibold text-slate-950">{paymentSummary.totalPaid.toFixed(2)}</dd>
+              <dt className="text-sm text-slate-500">Total Paid (Received)</dt>
+              <dd className="mt-1 font-semibold text-emerald-800">
+                Rs. {(Number.isFinite(paymentSummary.totalPaid) ? paymentSummary.totalPaid : 0).toFixed(2)}
+              </dd>
             </div>
             <div>
-              <dt className="text-sm text-slate-500">Remaining Balance</dt>
-              <dd className="mt-1 font-semibold text-slate-950">{paymentSummary.remainingBalance.toFixed(2)}</dd>
+              <dt className="text-sm text-slate-500">Payment Due / Outstanding</dt>
+              <dd className={`mt-1 font-semibold ${paymentSummary.remainingBalance > 0 ? "text-rose-700" : "text-emerald-800"}`}>
+                Rs. {(Number.isFinite(paymentSummary.remainingBalance) ? paymentSummary.remainingBalance : 0).toFixed(2)}
+              </dd>
             </div>
           </dl>
         )}

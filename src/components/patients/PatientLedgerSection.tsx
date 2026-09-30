@@ -13,7 +13,8 @@ function formatDate(date: string) {
 }
 
 function formatAmount(amount: number) {
-  return amount.toLocaleString("en-US", {
+  const safe = Number.isFinite(amount) ? amount : 0;
+  return safe.toLocaleString("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
@@ -59,10 +60,12 @@ export default function PatientLedgerSection({
 
   const totals = entries.reduce(
     (summary, entry) => {
+      const val = Number(entry.amount);
+      const safeAmount = Number.isFinite(val) ? val : 0;
       if (entry.entry_type === "charge") {
-        summary.charges += Number(entry.amount);
+        summary.charges += safeAmount;
       } else {
-        summary.payments += Number(entry.amount);
+        summary.payments += safeAmount;
       }
       return summary;
     },
@@ -73,9 +76,9 @@ export default function PatientLedgerSection({
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-colors hover:border-cyan-200 hover:shadow-md sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-base font-semibold text-slate-950">Ledger</h2>
+        <h2 className="text-base font-semibold text-slate-950">Patient Ledger</h2>
         <Link href={`/doctor/ledger?patientId=${patientId}`} className="text-sm font-semibold text-cyan-700 hover:text-cyan-900">
-          View ledger details
+          View full ledger &rarr;
         </Link>
       </div>
       {isLoading && <p className="mt-4 text-sm text-slate-500">Loading ledger...</p>}
@@ -86,17 +89,17 @@ export default function PatientLedgerSection({
         <>
           <dl className="mt-4 grid gap-3 border-b border-slate-200 pb-4 text-sm sm:grid-cols-3">
             <div>
-              <dt className="text-slate-500">Total Charges</dt>
-              <dd className="mt-1 font-semibold text-amber-800">+{formatAmount(totals.charges)}</dd>
+              <dt className="text-slate-500">Total Charges (Billed)</dt>
+              <dd className="mt-1 font-semibold text-slate-900">Rs. {formatAmount(totals.charges)}</dd>
             </div>
             <div>
-              <dt className="text-slate-500">Total Paid</dt>
-              <dd className="mt-1 font-semibold text-emerald-800">{formatAmount(totals.payments)}</dd>
+              <dt className="text-slate-500">Total Paid (Received)</dt>
+              <dd className="mt-1 font-semibold text-emerald-800">Rs. {formatAmount(totals.payments)}</dd>
             </div>
             <div>
-              <dt className="text-slate-500">Remaining Balance</dt>
-              <dd className={`mt-1 font-semibold ${balance > 0 ? "text-amber-800" : balance < 0 ? "text-emerald-800" : "text-slate-950"}`}>
-                {formatAmount(Math.max(0, balance))}
+              <dt className="text-slate-500">Payment Due / Outstanding</dt>
+              <dd className={`mt-1 font-semibold ${balance > 0 ? "text-rose-700" : "text-emerald-800"}`}>
+                Rs. {formatAmount(Math.max(0, balance))}
               </dd>
             </div>
           </dl>

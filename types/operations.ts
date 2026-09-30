@@ -1,17 +1,23 @@
 export const ledgerEntryTypes = ["charge", "payment"] as const;
 export type LedgerEntryType = (typeof ledgerEntryTypes)[number];
 
-export const paymentStatuses = ["Paid", "Partially Paid", "Payment Pending"] as const;
+export const paymentStatuses = ["Paid", "Partially Paid", "Payment Due / Outstanding"] as const;
 export type PaymentStatus = (typeof paymentStatuses)[number];
 
 export function getPaymentStatus(totalCharges: number, totalPaid: number): PaymentStatus {
-  if (totalPaid === 0) {
-    return "Payment Pending";
-  }
-  if (totalPaid >= totalCharges) {
+  const charges = Number.isFinite(totalCharges) ? totalCharges : 0;
+  const paid = Number.isFinite(totalPaid) ? totalPaid : 0;
+
+  if (charges <= 0 && paid >= 0) {
     return "Paid";
   }
-  return "Partially Paid";
+  if (paid >= charges) {
+    return "Paid";
+  }
+  if (paid > 0) {
+    return "Partially Paid";
+  }
+  return "Payment Due / Outstanding";
 }
 
 export type LedgerEntry = {
