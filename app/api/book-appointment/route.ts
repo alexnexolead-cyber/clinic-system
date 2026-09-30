@@ -39,7 +39,23 @@ function isDateKey(value: string): boolean {
   }
 
   const date = new Date(`${value}T00:00:00.000Z`);
-  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
+    return false;
+  }
+
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Karachi",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const dateParts = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const todayInPakistan = `${dateParts.year}-${dateParts.month}-${dateParts.day}`;
+  return value >= todayInPakistan;
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
 export async function POST(request: Request) {
@@ -56,11 +72,13 @@ export async function POST(request: Request) {
   }
 
   const patientCode = readRequiredString(requestBody.patientCode)?.toUpperCase();
+  const patientId = readRequiredString(requestBody.patientId);
   const appointmentType = requestBody.appointmentType;
   const preferredDate = readRequiredString(requestBody.preferredDate);
 
   if (
-    !patientCode ||
+    Boolean(patientCode) === Boolean(patientId) ||
+    (patientId !== null && !isUuid(patientId)) ||
     !isAppointmentType(appointmentType) ||
     !preferredDate ||
     !isDateKey(preferredDate)
@@ -89,10 +107,12 @@ export async function POST(request: Request) {
 
   let matchingPatients;
   try {
-    const { data, error: patientLookupError } = await supabase
+    const patientQuery = supabase
       .from("patients")
-      .select("id, first_name, last_name, phone, city")
-      .eq("patient_code", patientCode);
+      .select("id, first_name, last_name, phone, city");
+    const { data, error: patientLookupError } = patientCode
+      ? await patientQuery.eq("patient_code", patientCode)
+      : await patientQuery.eq("id", patientId!);
 
     if (patientLookupError) {
       console.error("Patient code lookup failed:", patientLookupError);
@@ -132,6 +152,29 @@ export async function POST(request: Request) {
 
   const existingPatient = matchingPatients[0];
   try {
+    if (appointmentType === "Online Consultation") {
+      const { data: requestRecord, error: requestInsertError } = await supabase
+        .from("online_appointment_requests")
+        .insert({
+          patient_id: existingPatient.id,
+          appointment_type: appointmentType,
+          preferred_date: preferredDate,
+          status: "pending",
+        })
+        .select("id")
+        .single();
+
+      if (requestInsertError) {
+        console.error("Online appointment request creation failed:", requestInsertError);
+        return bookingError(
+          `Online appointment request creation failed: ${requestInsertError.message}`,
+          500,
+        );
+      }
+
+      return NextResponse.json({ success: true, requestId: requestRecord.id }, { status: 201 });
+    }
+
     const { error: appointmentInsertError } = await supabase
       .from("appointments")
       .insert({
@@ -142,7 +185,7 @@ export async function POST(request: Request) {
         city: existingPatient.city ?? "",
         appointment_type: appointmentType,
         preferred_date: preferredDate,
-        status: appointmentType === "Physical Visit" ? "confirmed" : "pending",
+        status: "confirmed",
       });
 
     if (appointmentInsertError) {

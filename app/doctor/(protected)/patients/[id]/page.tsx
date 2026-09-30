@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import PatientClinicalTimeline from "@/src/components/patients/PatientClinicalTimeline";
+import PatientLedgerSection from "@/src/components/patients/PatientLedgerSection";
 import PatientPrescriptionsSection from "@/src/components/patients/PatientPrescriptionsSection";
 import PatientVitalsSection from "@/src/components/patients/PatientVitalsSection";
 import PatientVisitsSection from "@/src/components/patients/PatientVisitsSection";
@@ -33,21 +35,6 @@ function PatientField({ label, value }: { label: string; value: string }) {
       <dt className="text-sm text-slate-500">{label}</dt>
       <dd className="mt-1 font-semibold text-slate-950">{value || "-"}</dd>
     </div>
-  );
-}
-
-function PlaceholderSection({
-  title,
-  message,
-}: {
-  title: string;
-  message: string;
-}) {
-  return (
-    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-      <h2 className="text-base font-semibold text-slate-950">{title}</h2>
-      <p className="mt-4 text-sm text-slate-500">{message}</p>
-    </section>
   );
 }
 
@@ -181,8 +168,8 @@ export default function PatientProfilePage() {
             </div>
           </header>
 
-          <div className="mt-7 grid gap-5 lg:grid-cols-2">
-            <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <div className="mt-6 grid items-start gap-4 sm:gap-5 lg:grid-cols-2">
+            <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-colors hover:border-cyan-200 hover:shadow-md sm:p-6">
               <h2 className="text-base font-semibold text-slate-950">
                 Personal Information
               </h2>
@@ -198,10 +185,13 @@ export default function PatientProfilePage() {
               </dl>
             </section>
 
-            <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-              <h2 className="text-base font-semibold text-slate-950">
-                Appointments
-              </h2>
+            <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-colors hover:border-cyan-200 hover:shadow-md sm:p-6">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-base font-semibold text-slate-950">Appointments</h2>
+                <Link href="/doctor/appointments" className="text-sm font-semibold text-cyan-700 hover:text-cyan-900">
+                  All appointments
+                </Link>
+              </div>
               {isLoadingAppointments && (
                 <p className="mt-4 text-sm text-slate-500">
                   Loading appointments...
@@ -252,13 +242,11 @@ export default function PatientProfilePage() {
                 )}
             </section>
 
-            <PatientVitalsSection patientId={patient.id} />
             <PatientVisitsSection patientId={patient.id} />
             <PatientPrescriptionsSection patientId={patient.id} />
-            <PlaceholderSection
-              title="Ledger"
-              message="No ledger entries yet."
-            />
+            <PatientVitalsSection patientId={patient.id} />
+            <PatientLedgerSection patientId={patient.id} />
+            <PatientClinicalTimeline patientId={patient.id} />
           </div>
         </>
       )}

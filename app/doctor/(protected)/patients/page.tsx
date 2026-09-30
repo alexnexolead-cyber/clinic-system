@@ -3,15 +3,20 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import PatientTable from "@/src/components/patients/PatientTable";
+import PaginationControls, { type PageSize } from "@/src/components/operations/PaginationControls";
 import { supabase } from "@/lib/supabase";
 import type { Patient } from "@/types/patient";
 
 const patientSelect =
   "id, patient_code, first_name, last_name, phone, city, created_at";
+type PatientSort = "name" | "code" | "created" | "city";
 
 export default function PatientsPage() {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<PatientSort>("created");
+  const [pageSize, setPageSize] = useState<PageSize>(10);
+  const [currentPage, setCurrentPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -48,20 +53,29 @@ export default function PatientsPage() {
 
   const filteredPatients = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
-
-    if (!normalizedSearch) {
-      return patients;
-    }
-
-    return patients.filter((patient) =>
-      [
+    const matchingPatients = normalizedSearch
+      ? patients.filter((patient) => [
         patient.patient_code,
         patient.first_name,
         patient.last_name,
         patient.phone,
-      ].some((value) => value?.toLowerCase().includes(normalizedSearch)),
-    );
-  }, [patients, search]);
+      ].some((value) => value?.toLowerCase().includes(normalizedSearch)))
+      : patients;
+
+    return [...matchingPatients].sort((left, right) => {
+      if (sort === "name") {
+        const leftName = [left.first_name, left.last_name].filter(Boolean).join(" ");
+        const rightName = [right.first_name, right.last_name].filter(Boolean).join(" ");
+        return leftName.localeCompare(rightName);
+      }
+      if (sort === "code") return (left.patient_code ?? "").localeCompare(right.patient_code ?? "");
+      if (sort === "city") return (left.city ?? "").localeCompare(right.city ?? "");
+      return new Date(right.created_at).getTime() - new Date(left.created_at).getTime();
+    });
+  }, [patients, search, sort]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredPatients.length / pageSize));
+  const visiblePatients = filteredPatients.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   return (
     <section className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8 lg:px-10 lg:py-10">
@@ -86,16 +100,28 @@ export default function PatientsPage() {
       </header>
 
       <section className="mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-200 p-4 sm:p-5">
-          <label className="block max-w-md space-y-2 text-sm font-medium text-slate-700">
+        <div className="grid gap-4 border-b border-slate-200 p-4 sm:grid-cols-2 sm:p-5">
+          <label className="block space-y-2 text-sm font-medium text-slate-700">
             Search patients
             <input
               type="search"
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setCurrentPage(1);
+              }}
               placeholder="Patient code, name, or phone"
               className="w-full rounded-lg border border-slate-300 px-3 py-2.5 font-normal text-slate-900 outline-none transition focus:border-cyan-600 focus:ring-2 focus:ring-cyan-100"
             />
+          </label>
+          <label className="block space-y-2 text-sm font-medium text-slate-700">
+            Sort patients
+            <select value={sort} onChange={(event) => { setSort(event.target.value as PatientSort); setCurrentPage(1); }} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 font-normal text-slate-900">
+              <option value="name">Patient Name</option>
+              <option value="code">Patient Code</option>
+              <option value="created">Created Date</option>
+              <option value="city">City</option>
+            </select>
           </label>
         </div>
 
@@ -123,7 +149,17 @@ export default function PatientsPage() {
         )}
 
         {!isLoading && !error && filteredPatients.length > 0 && (
-          <PatientTable patients={filteredPatients} />
+          <>
+            <PatientTable patients={visiblePatients} />
+            <PaginationControls
+              currentPage={currentPage}
+              pageSize={pageSize}
+              totalCount={filteredPatients.length}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={(nextSize) => { setPageSize(nextSize); setCurrentPage(1); }}
+            />
+          </>
         )}
       </section>
     </section>

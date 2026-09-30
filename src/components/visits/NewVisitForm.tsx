@@ -75,10 +75,11 @@ export default function NewVisitForm({
       .insert({
         patient_id: patient.id,
         visit_date: new Date(visitDate).toISOString(),
-        visit_type: visitType.trim() || null,
-        chief_complaint: chiefComplaint.trim() || null,
-        diagnosis: diagnosis.trim() || null,
-        clinical_notes: clinicalNotes.trim() || null,
+        visit_type: visitType.trim(),
+        chief_complaint: chiefComplaint.trim(),
+        diagnosis: diagnosis.trim(),
+        clinical_notes: clinicalNotes.trim(),
+        status: "in_progress",
       })
       .select("id")
       .single();
@@ -141,6 +142,7 @@ export default function NewVisitForm({
               Visit type
               <input
                 value={visitType}
+                required
                 onChange={(event) => setVisitType(event.target.value)}
                 placeholder="Consultation"
                 className="w-full rounded-lg border border-slate-300 px-3 py-2.5 font-normal text-slate-900 outline-none focus:border-cyan-600 focus:ring-2 focus:ring-cyan-100"
@@ -150,6 +152,7 @@ export default function NewVisitForm({
               Chief complaint
               <textarea
                 rows={2}
+                required
                 value={chiefComplaint}
                 onChange={(event) => setChiefComplaint(event.target.value)}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2.5 font-normal text-slate-900 outline-none focus:border-cyan-600 focus:ring-2 focus:ring-cyan-100"
@@ -159,6 +162,7 @@ export default function NewVisitForm({
               Diagnosis
               <textarea
                 rows={2}
+                required
                 value={diagnosis}
                 onChange={(event) => setDiagnosis(event.target.value)}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2.5 font-normal text-slate-900 outline-none focus:border-cyan-600 focus:ring-2 focus:ring-cyan-100"
@@ -168,6 +172,7 @@ export default function NewVisitForm({
               Clinical notes
               <textarea
                 rows={5}
+                required
                 value={clinicalNotes}
                 onChange={(event) => setClinicalNotes(event.target.value)}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2.5 font-normal text-slate-900 outline-none focus:border-cyan-600 focus:ring-2 focus:ring-cyan-100"

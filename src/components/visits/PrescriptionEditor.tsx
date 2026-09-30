@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import type {
   Prescription,
@@ -198,6 +199,13 @@ export default function PrescriptionEditor({
     setError("");
     const completedRows = rows.filter((row) => row.medicine_name.trim());
 
+    if (completedRows.some((row) =>
+      [row.dosage, row.frequency, row.duration, row.instructions].some((value) => !value.trim()),
+    )) {
+      setError("Complete dosage, frequency, duration, and instructions for each medicine.");
+      return;
+    }
+
     const unselectedMedicines = completedRows.some(
       (row) =>
         row.medicine_id === null &&
@@ -376,22 +384,30 @@ export default function PrescriptionEditor({
         <p className="mt-4 text-sm text-slate-500">No prescriptions recorded yet.</p>
       )}
       {!isLoading && !isEditing && items.length > 0 && (
-        <div className="mt-4 space-y-4">
-          {items.map((item) => (
-            <article key={item.id} className="border-t border-slate-200 pt-4 first:border-0 first:pt-0">
-              <p className="font-semibold text-slate-950">{item.medicine_name}</p>
-              <p className="mt-1 text-sm text-slate-600">
-                {[item.dosage, item.frequency, item.duration]
-                  .filter(Boolean)
-                  .join(" · ") || "No dosage details"}
-              </p>
-              {item.instructions && (
-                <p className="mt-1 whitespace-pre-wrap text-sm text-slate-600">
-                  {item.instructions}
+        <div className="mt-4">
+          <div className="space-y-4">
+            {items.map((item) => (
+              <article key={item.id} className="border-t border-slate-200 pt-4 first:border-0 first:pt-0">
+                <p className="font-semibold text-slate-950">{item.medicine_name}</p>
+                <p className="mt-1 text-sm text-slate-600">
+                  {[item.dosage, item.frequency, item.duration]
+                    .filter(Boolean)
+                    .join(" · ") || "No dosage details"}
                 </p>
-              )}
-            </article>
-          ))}
+                {item.instructions && (
+                  <p className="mt-1 whitespace-pre-wrap text-sm text-slate-600">
+                    {item.instructions}
+                  </p>
+                )}
+              </article>
+            ))}
+          </div>
+          <Link
+            href={`/doctor/visits/${visitId}/prescription`}
+            className="mt-4 inline-block text-sm font-semibold text-cyan-700 transition hover:text-cyan-900"
+          >
+            View / print prescription
+          </Link>
         </div>
       )}
 
@@ -482,6 +498,7 @@ export default function PrescriptionEditor({
                     <label key={field} className="space-y-2 text-sm font-medium text-slate-700">
                       {label}
                       <input
+                        required
                         value={row[field]}
                         onChange={(event) => updateRow(index, field, event.target.value)}
                         className="w-full rounded-lg border border-slate-300 px-3 py-2.5 font-normal text-slate-900 outline-none focus:border-cyan-600 focus:ring-2 focus:ring-cyan-100"
@@ -491,6 +508,7 @@ export default function PrescriptionEditor({
                   <label className="space-y-2 text-sm font-medium text-slate-700">
                     Frequency
                     <select
+                      required
                       value={row.frequency}
                       onChange={(event) => updateRow(index, "frequency", event.target.value)}
                       className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 font-normal text-slate-900 outline-none focus:border-cyan-600 focus:ring-2 focus:ring-cyan-100"
@@ -508,6 +526,7 @@ export default function PrescriptionEditor({
                     Instructions
                     <textarea
                       rows={2}
+                      required
                       value={row.instructions}
                       onChange={(event) => updateRow(index, "instructions", event.target.value)}
                       className="w-full rounded-lg border border-slate-300 px-3 py-2.5 font-normal text-slate-900 outline-none focus:border-cyan-600 focus:ring-2 focus:ring-cyan-100"

@@ -12,6 +12,7 @@ const navigationItems = [
   { label: "Visits", shortLabel: "Visits", href: "/doctor/visits" },
   { label: "Prescriptions", shortLabel: "Prescriptions", href: "/doctor/prescriptions" },
   { label: "Ledger", shortLabel: "Ledger", href: "/doctor/ledger" },
+  { label: "Reports", shortLabel: "Reports", href: "/doctor/reports" },
   { label: "Settings", shortLabel: "Settings", href: "/doctor/settings" },
 ];
 

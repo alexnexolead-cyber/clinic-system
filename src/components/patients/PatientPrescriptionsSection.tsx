@@ -27,7 +27,7 @@ export default function PatientPrescriptionsSection({
       const { data, error: fetchError } = await supabase
         .from("visits")
         .select(
-          "id, visit_date, diagnosis, prescriptions(id, prescription_items(id, medicine_name))",
+          "id, visit_date, diagnosis, prescriptions(id, prescription_items(id, medicine_name, dosage, frequency, duration))",
         )
         .eq("patient_id", patientId)
         .order("visit_date", { ascending: false });
@@ -59,8 +59,13 @@ export default function PatientPrescriptionsSection({
   }, [patientId]);
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-      <h2 className="text-base font-semibold text-slate-950">Prescriptions</h2>
+    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-colors hover:border-cyan-200 hover:shadow-md sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-base font-semibold text-slate-950">Prescriptions</h2>
+        <Link href="/doctor/prescriptions" className="text-sm font-semibold text-cyan-700 hover:text-cyan-900">
+          All prescriptions
+        </Link>
+      </div>
       {isLoading && (
         <p className="mt-4 text-sm text-slate-500">Loading prescriptions...</p>
       )}
@@ -89,15 +94,27 @@ export default function PatientPrescriptionsSection({
               <ul className="mt-3 space-y-1 text-sm text-slate-700">
                 {visit.prescriptions.flatMap((prescription) =>
                   prescription.prescription_items.map((item) => (
-                    <li key={item.id}>{item.medicine_name}</li>
+                    <li key={item.id}>
+                      <span className="font-medium">{item.medicine_name}</span>
+                      {[item.dosage, item.frequency, item.duration]
+                        .filter(Boolean)
+                        .length > 0 && (
+                        <span className="text-slate-500">
+                          {" · "}
+                          {[item.dosage, item.frequency, item.duration]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </span>
+                      )}
+                    </li>
                   )),
                 )}
               </ul>
               <Link
-                href={`/doctor/visits/${visit.id}`}
+                href={`/doctor/visits/${visit.id}/prescription`}
                 className="mt-3 inline-block text-sm font-semibold text-cyan-700 transition hover:text-cyan-900"
               >
-                View Visit / Prescription
+                View prescription
               </Link>
             </article>
           ))}

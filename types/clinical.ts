@@ -57,6 +57,9 @@ export type VisitPrescriptionSummary = {
   diagnosis: string | null;
   prescriptions: Array<{
     id: string;
-    prescription_items: Pick<PrescriptionItem, "id" | "medicine_name">[];
+    prescription_items: Pick<
+      PrescriptionItem,
+      "id" | "medicine_name" | "dosage" | "frequency" | "duration"
+    >[];
   }>;
 };

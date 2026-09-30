@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import PrescriptionEditor from "@/src/components/visits/PrescriptionEditor";
+import PatientVitalsSection from "@/src/components/patients/PatientVitalsSection";
 import type { Patient } from "@/types/patient";
 import type { Visit, VisitStatus } from "@/types/clinical";
 
@@ -120,16 +121,22 @@ export default function VisitDetailPage() {
       return;
     }
 
+    if ([form.visit_type, form.chief_complaint, form.diagnosis, form.clinical_notes]
+      .some((value) => !value.trim())) {
+      setError("Visit type, complaint, diagnosis, and clinical notes are required.");
+      return;
+    }
+
     setError("");
     setIsSaving(true);
     const { data, error: updateError } = await supabase
       .from("visits")
       .update({
         visit_date: new Date(form.visit_date).toISOString(),
-        visit_type: form.visit_type.trim() || null,
-        chief_complaint: form.chief_complaint.trim() || null,
-        diagnosis: form.diagnosis.trim() || null,
-        clinical_notes: form.clinical_notes.trim() || null,
+        visit_type: form.visit_type.trim(),
+        chief_complaint: form.chief_complaint.trim(),
+        diagnosis: form.diagnosis.trim(),
+        clinical_notes: form.clinical_notes.trim(),
       })
       .eq("id", visit.id)
       .eq("patient_id", visit.patient_id)
@@ -238,6 +245,7 @@ export default function VisitDetailPage() {
                 <label className="space-y-2 text-sm font-medium text-slate-700">
                   Visit type
                   <input
+                    required
                     value={form.visit_type}
                     onChange={(event) =>
                       setForm((current) => ({ ...current, visit_type: event.target.value }))
@@ -249,6 +257,7 @@ export default function VisitDetailPage() {
                   Chief complaint
                   <textarea
                     rows={2}
+                    required
                     value={form.chief_complaint}
                     onChange={(event) =>
                       setForm((current) => ({ ...current, chief_complaint: event.target.value }))
@@ -260,6 +269,7 @@ export default function VisitDetailPage() {
                   Diagnosis
                   <textarea
                     rows={2}
+                    required
                     value={form.diagnosis}
                     onChange={(event) =>
                       setForm((current) => ({ ...current, diagnosis: event.target.value }))
@@ -271,6 +281,7 @@ export default function VisitDetailPage() {
                   Clinical notes
                   <textarea
                     rows={5}
+                    required
                     value={form.clinical_notes}
                     onChange={(event) =>
                       setForm((current) => ({ ...current, clinical_notes: event.target.value }))
@@ -308,24 +319,36 @@ export default function VisitDetailPage() {
               </div>
             </form>
           ) : (
-            <section className="mt-7 rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-              <dl className="grid gap-5 sm:grid-cols-2">
+            <div className="mt-7 grid items-start gap-4 sm:gap-5 lg:grid-cols-2">
+              <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+                <h2 className="text-base font-semibold text-slate-950">Patient Information</h2>
+                <dl className="mt-4 grid gap-4 sm:grid-cols-2">
                 <div>
-                  <dt className="text-sm text-slate-500">Visit date</dt>
-                  <dd className="mt-1 font-semibold text-slate-950">{formatDateTime(visit.visit_date)}</dd>
-                </div>
-                <div>
-                  <dt className="text-sm text-slate-500">Visit type</dt>
-                  <dd className="mt-1 font-semibold text-slate-950">{visit.visit_type || "-"}</dd>
-                </div>
-                <div>
-                  <dt className="text-sm text-slate-500">Status</dt>
-                  <dd className="mt-1 font-semibold capitalize text-slate-950">{visit.status.replaceAll("_", " ")}</dd>
+                  <dt className="text-sm text-slate-500">Patient</dt>
+                  <dd className="mt-1 font-semibold text-slate-950">{patientName}</dd>
                 </div>
                 <div>
                   <dt className="text-sm text-slate-500">Patient code</dt>
                   <dd className="mt-1 font-semibold text-slate-950">{patient.patient_code ?? "-"}</dd>
                 </div>
+                <div>
+                  <dt className="text-sm text-slate-500">Phone</dt>
+                  <dd className="mt-1 font-semibold text-slate-950">{patient.phone ?? "-"}</dd>
+                </div>
+                <div>
+                  <dt className="text-sm text-slate-500">Visit date</dt>
+                  <dd className="mt-1 font-semibold text-slate-950">{formatDateTime(visit.visit_date)}</dd>
+                </div>
+                <div className="sm:col-span-2">
+                  <dt className="text-sm text-slate-500">Visit type</dt>
+                  <dd className="mt-1 font-semibold text-slate-950">{visit.visit_type || "-"}</dd>
+                </div>
+                </dl>
+              </section>
+
+              <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+                <h2 className="text-base font-semibold text-slate-950">Doctor Notes</h2>
+                <dl className="mt-4 space-y-4">
                 <div className="sm:col-span-2">
                   <dt className="text-sm text-slate-500">Chief complaint</dt>
                   <dd className="mt-1 whitespace-pre-wrap text-slate-800">{visit.chief_complaint || "-"}</dd>
@@ -338,18 +361,26 @@ export default function VisitDetailPage() {
                   <dt className="text-sm text-slate-500">Clinical notes</dt>
                   <dd className="mt-1 whitespace-pre-wrap text-slate-800">{visit.clinical_notes || "-"}</dd>
                 </div>
-              </dl>
-              {visit.status === "in_progress" && (
-                <button
-                  type="button"
-                  disabled={isSaving}
-                  onClick={() => changeVisitStatus("completed")}
-                  className="mt-6 rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:opacity-60"
-                >
-                  {isSaving ? "Updating..." : "Complete visit"}
-                </button>
-              )}
-            </section>
+                </dl>
+              </section>
+
+              <PatientVitalsSection patientId={visit.patient_id} />
+
+              <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+                <h2 className="text-base font-semibold text-slate-950">Follow-up</h2>
+                <p className="mt-3 text-sm text-slate-600">No follow-up details recorded for this visit.</p>
+                {visit.status === "in_progress" && (
+                  <button
+                    type="button"
+                    disabled={isSaving}
+                    onClick={() => changeVisitStatus("completed")}
+                    className="mt-5 rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:opacity-60"
+                  >
+                    {isSaving ? "Updating..." : "Complete visit"}
+                  </button>
+                )}
+              </section>
+            </div>
           )}
 
           <div className="mt-6">

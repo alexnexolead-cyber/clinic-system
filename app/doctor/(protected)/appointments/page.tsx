@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import AppointmentFilters from "@/src/components/appointments/AppointmentFilters";
+import { useRouter } from "next/navigation";
+import AppointmentFilters, { type AppointmentFilter, type AppointmentSort } from "@/src/components/appointments/AppointmentFilters";
 import AppointmentTable from "@/src/components/appointments/AppointmentTable";
+import PaginationControls, { type PageSize } from "@/src/components/operations/PaginationControls";
+import { getOrCreateVisitForAppointment } from "@/lib/clinical-visits";
 import { supabase } from "@/lib/supabase";
 import type { Appointment, AppointmentStatus } from "@/types/appointment";
 
@@ -16,10 +19,15 @@ function getPatientIdentity(appointment: Appointment) {
 }
 
 export default function AppointmentsPage() {
+  const router = useRouter();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState<AppointmentStatus | "all">("all");
+  const [filter, setFilter] = useState<AppointmentFilter>("all");
+  const [sort, setSort] = useState<AppointmentSort>("date");
+  const [pageSize, setPageSize] = useState<PageSize>(10);
+  const [currentPage, setCurrentPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
+  const [busyAppointmentId, setBusyAppointmentId] = useState<string | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -56,8 +64,10 @@ export default function AppointmentsPage() {
 
   const filteredAppointments = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
+    const today = new Date();
+    const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
 
-    return appointments.filter((appointment) => {
+    const filtered = appointments.filter((appointment) => {
       const patient = getPatientIdentity(appointment);
       const matchesSearch =
         !normalizedSearch ||
@@ -74,11 +84,103 @@ export default function AppointmentsPage() {
         (patient?.phone ?? appointment.phone)
           .toLowerCase()
           .includes(normalizedSearch);
-      const matchesStatus = status === "all" || appointment.status === status;
+      const dateKey = appointment.preferred_date.slice(0, 10);
+      const matchesFilter = (() => {
+        switch (filter) {
+          case "today":
+            return dateKey === todayKey;
+          case "upcoming":
+            return dateKey > todayKey && !["completed", "cancelled"].includes(appointment.status);
+          case "completed":
+            return appointment.status === "completed";
+          case "cancelled":
+            return appointment.status === "cancelled";
+          default:
+            return true;
+        }
+      })();
 
-      return matchesSearch && matchesStatus;
+      return matchesSearch && matchesFilter;
     });
-  }, [appointments, search, status]);
+
+    return [...filtered].sort((left, right) => {
+      if (sort === "name") {
+        const leftPatient = getPatientIdentity(left);
+        const rightPatient = getPatientIdentity(right);
+        const leftName = [leftPatient?.first_name ?? left.first_name, leftPatient?.last_name ?? left.last_name].join(" ");
+        const rightName = [rightPatient?.first_name ?? right.first_name, rightPatient?.last_name ?? right.last_name].join(" ");
+        return leftName.localeCompare(rightName);
+      }
+      if (sort === "status") return left.status.localeCompare(right.status);
+      if (sort === "type") return left.appointment_type.localeCompare(right.appointment_type);
+      return left.preferred_date.localeCompare(right.preferred_date);
+    });
+  }, [appointments, filter, search, sort]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredAppointments.length / pageSize));
+  const visibleAppointments = filteredAppointments.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  async function updateAppointmentStatus(
+    appointmentId: Appointment["id"],
+    nextStatus: AppointmentStatus,
+  ) {
+    setError("");
+    setBusyAppointmentId(String(appointmentId));
+    const { error: updateError } = await supabase
+      .from("appointments")
+      .update({ status: nextStatus })
+      .eq("id", appointmentId);
+
+    if (updateError) {
+      console.error("Supabase appointment status update failed:", updateError);
+      setError(updateError.message);
+    } else {
+      setAppointments((current) => current.map((appointment) =>
+        appointment.id === appointmentId
+          ? { ...appointment, status: nextStatus }
+          : appointment,
+      ));
+    }
+    setBusyAppointmentId(null);
+  }
+
+  async function startVisit(appointment: Appointment) {
+    if (!appointment.patient_id) {
+      setError("This appointment has no linked patient.");
+      return;
+    }
+
+    setError("");
+    setBusyAppointmentId(String(appointment.id));
+    const result = await getOrCreateVisitForAppointment(
+      supabase,
+      appointment.patient_id,
+      appointment.id,
+    );
+    if (result.error || !result.visitId) {
+      setError(result.error ?? "Visit could not be opened.");
+      setBusyAppointmentId(null);
+      return;
+    }
+    router.push(`/doctor/visits/${result.visitId}`);
+  }
+
+  async function viewVisit(appointment: Appointment) {
+    setError("");
+    setBusyAppointmentId(String(appointment.id));
+    const { data, error: visitError } = await supabase
+      .from("visits")
+      .select("id")
+      .eq("appointment_id", appointment.id)
+      .maybeSingle();
+
+    if (visitError || !data) {
+      setError(visitError?.message ?? "No visit is linked to this appointment.");
+      setBusyAppointmentId(null);
+      return;
+    }
+    router.push(`/doctor/visits/${data.id}`);
+  }
 
   return (
     <section className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8 lg:px-10 lg:py-10">
@@ -94,12 +196,16 @@ export default function AppointmentsPage() {
         </p>
       </header>
 
+      {error && <p className="mt-5 text-sm text-red-600" role="alert">{error}</p>}
+
       <section className="mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <AppointmentFilters
           search={search}
-          status={status}
-          onSearchChange={setSearch}
-          onStatusChange={setStatus}
+          filter={filter}
+          sort={sort}
+          onSearchChange={(value) => { setSearch(value); setCurrentPage(1); }}
+          onFilterChange={(value) => { setFilter(value); setCurrentPage(1); }}
+          onSortChange={(value) => { setSort(value); setCurrentPage(1); }}
         />
 
         {isLoading && (
@@ -126,7 +232,23 @@ export default function AppointmentsPage() {
         )}
 
         {!isLoading && !error && filteredAppointments.length > 0 && (
-          <AppointmentTable appointments={filteredAppointments} />
+          <>
+            <AppointmentTable
+              appointments={visibleAppointments}
+              busyAppointmentId={busyAppointmentId}
+              onStatusChange={updateAppointmentStatus}
+              onStartVisit={startVisit}
+              onViewVisit={viewVisit}
+            />
+            <PaginationControls
+              currentPage={currentPage}
+              pageSize={pageSize}
+              totalCount={filteredAppointments.length}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={(nextSize) => { setPageSize(nextSize); setCurrentPage(1); }}
+            />
+          </>
         )}
       </section>
     </section>

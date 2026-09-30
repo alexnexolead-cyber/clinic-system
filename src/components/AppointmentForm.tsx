@@ -2,6 +2,15 @@
 
 import { FormEvent, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import {
+  isAllowedPakistanCity,
+  isValidPakistanMobile,
+  isValidPersonName,
+  normalizePakistanPhone,
+  pakistanCities,
+  sanitizePakistanPhone,
+  sanitizePersonName,
+} from "@/lib/patient-validation";
 import type { PatientAttributes } from "@/types/patient";
 
 type AppointmentType = "Physical Visit" | "Online Consultation";
@@ -16,6 +25,33 @@ type FormData = {
   preferredDate: string;
 };
 
+const cities = pakistanCities;
+
+function sanitizePatientCode(value: string) {
+  return value.toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 32);
+}
+
+function pakistanToday() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Karachi",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function isValidBookingDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(date.getTime()) &&
+    date.toISOString().slice(0, 10) === value &&
+    value >= pakistanToday();
+}
+
 const initialFormData: FormData = {
   firstName: "",
   lastName: "",
@@ -25,21 +61,52 @@ const initialFormData: FormData = {
   preferredDate: "",
 };
 
+async function submitOnlineRequest(identity: { patientCode: string } | { patientId: string }, preferredDate: string) {
+  const response = await fetch("/api/book-appointment", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...identity,
+      appointmentType: "Online Consultation",
+      preferredDate,
+    }),
+  });
+
+  if (response.ok) {
+    return null;
+  }
+
+  const responseBody: unknown = await response.json().catch(() => null);
+  return typeof responseBody === "object" &&
+    responseBody !== null &&
+    "error" in responseBody &&
+    typeof responseBody.error === "string"
+    ? responseBody.error
+    : "We could not submit your appointment. Please try again.";
+}
+
 function AppointmentForm() {
   const [formData, setFormData] = useState<FormData>(initialFormData);
   const [patientMode, setPatientMode] = useState<PatientMode>("new");
   const [patientCode, setPatientCode] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [lastSubmittedAppointmentType, setLastSubmittedAppointmentType] = useState<AppointmentType | "">("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   function handleChange(
     field: keyof FormData,
     value: string,
   ) {
-    setFormData((current) => ({ ...current, [field]: value }));
+    const sanitizedValue = field === "firstName" || field === "lastName"
+      ? sanitizePersonName(value)
+      : field === "phone"
+        ? sanitizePakistanPhone(value)
+        : value;
+    setFormData((current) => ({ ...current, [field]: sanitizedValue }));
     setError("");
     setSuccess("");
+    setLastSubmittedAppointmentType("");
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -48,21 +115,53 @@ function AppointmentForm() {
     setSuccess("");
 
     const hasMissingField =
-      Object.values(formData).some((value) => !value.trim()) ||
-      (patientMode === "existing" && !patientCode.trim());
+      !formData.appointmentType ||
+      !formData.preferredDate.trim() ||
+      (patientMode === "existing" && !patientCode.trim()) ||
+      (patientMode === "new" && (
+        !formData.firstName.trim() ||
+        !formData.lastName.trim() ||
+        !formData.phone.trim() ||
+        !formData.city.trim()
+      ));
 
     if (hasMissingField) {
       setError("Please complete all required fields.");
       return;
     }
 
+    if (!isValidBookingDate(formData.preferredDate)) {
+      setError("Choose today or a future date in Pakistan time.");
+      return;
+    }
+
+    if (patientMode === "new" && (
+      !isValidPersonName(formData.firstName) ||
+      !isValidPersonName(formData.lastName)
+    )) {
+      setError("Enter valid first and last names using letters, spaces, apostrophes, or hyphens.");
+      return;
+    }
+
+    const normalizedPhone = normalizePakistanPhone(formData.phone);
+    if (patientMode === "new" && !isValidPakistanMobile(formData.phone)) {
+      setError("Enter a valid Pakistan mobile number, for example 03001234567 or +923001234567.");
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
-      const firstName = formData.firstName.trim();
-      const lastName = formData.lastName.trim();
-      const phone = formData.phone.trim();
-      const city = formData.city.trim();
+      const firstName = sanitizePersonName(formData.firstName);
+      const lastName = sanitizePersonName(formData.lastName);
+      const phone = normalizedPhone;
+      const city = formData.city;
+
+      if (patientMode === "new" && !isAllowedPakistanCity(city)) {
+        setError("Choose a city from the list.");
+        setIsSubmitting(false);
+        return;
+      }
 
       const patientAttributes: PatientAttributes = {
         first_name: firstName,
@@ -84,56 +183,78 @@ function AppointmentForm() {
           return;
         }
 
-        const { error: appointmentInsertError } = await supabase
-          .from("appointments")
-          .insert({
-            patient_id: createdPatient.id,
-            ...patientAttributes,
-            appointment_type: formData.appointmentType,
-            preferred_date: formData.preferredDate,
-            status:
-              formData.appointmentType === "Physical Visit"
-                ? "confirmed"
-                : "pending",
-          });
-
-        if (appointmentInsertError) {
-          console.error(
-            "Supabase appointment creation failed:",
-            appointmentInsertError,
+        if (formData.appointmentType === "Online Consultation") {
+          const requestError = await submitOnlineRequest(
+            { patientId: createdPatient.id },
+            formData.preferredDate,
           );
-          setError("We could not submit your appointment. Please try again.");
-          return;
+          if (requestError) {
+            setError(requestError);
+            return;
+          }
+        } else {
+          const { error: appointmentInsertError } = await supabase
+            .from("appointments")
+            .insert({
+              patient_id: createdPatient.id,
+              ...patientAttributes,
+              appointment_type: formData.appointmentType,
+              preferred_date: formData.preferredDate,
+              status: "confirmed",
+            });
+
+          if (appointmentInsertError) {
+            console.error(
+              "Supabase appointment creation failed:",
+              appointmentInsertError,
+            );
+            setError("We could not submit your appointment. Please try again.");
+            return;
+          }
         }
       } else {
-        const response = await fetch("/api/book-appointment", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            patientCode,
-            appointmentType: formData.appointmentType,
-            preferredDate: formData.preferredDate,
-          }),
-        });
-        const responseBody: unknown = await response.json();
+        if (formData.appointmentType === "Online Consultation") {
+          const requestError = await submitOnlineRequest(
+            { patientCode },
+            formData.preferredDate,
+          );
+          if (requestError) {
+            setError(requestError);
+            return;
+          }
+        } else {
+          const response = await fetch("/api/book-appointment", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              patientCode,
+              appointmentType: formData.appointmentType,
+              preferredDate: formData.preferredDate,
+            }),
+          });
+          const responseBody: unknown = await response.json();
 
-        if (!response.ok) {
-          const responseError =
-            typeof responseBody === "object" &&
-            responseBody !== null &&
-            "error" in responseBody &&
-            typeof responseBody.error === "string"
-              ? responseBody.error
-              : "We could not submit your appointment. Please try again.";
-          setError(responseError);
-          return;
+          if (!response.ok) {
+            const responseError =
+              typeof responseBody === "object" &&
+              responseBody !== null &&
+              "error" in responseBody &&
+              typeof responseBody.error === "string"
+                ? responseBody.error
+                : "We could not submit your appointment. Please try again.";
+            setError(responseError);
+            return;
+          }
         }
       }
 
       setFormData(initialFormData);
       setPatientMode("new");
       setPatientCode("");
-      setSuccess("Appointment submitted successfully");
+      setLastSubmittedAppointmentType(formData.appointmentType);
+      setSuccess(formData.appointmentType === "Online Consultation"
+        ? "Your booking form has been submitted successfully."
+        : "Appointment submitted successfully.");
     } catch (submissionError) {
       console.error("Unexpected appointment submission error:", submissionError);
       setError(
@@ -172,7 +293,14 @@ function AppointmentForm() {
               name="patientMode"
               value="new"
               checked={patientMode === "new"}
-              onChange={() => setPatientMode("new")}
+              onChange={() => {
+                setPatientMode("new");
+                setFormData(initialFormData);
+                setPatientCode("");
+                setError("");
+                setSuccess("");
+                setLastSubmittedAppointmentType("");
+              }}
               disabled={isSubmitting}
               className="accent-blue-600"
             />
@@ -184,7 +312,14 @@ function AppointmentForm() {
               name="patientMode"
               value="existing"
               checked={patientMode === "existing"}
-              onChange={() => setPatientMode("existing")}
+              onChange={() => {
+                setPatientMode("existing");
+                setFormData(initialFormData);
+                setPatientCode("");
+                setError("");
+                setSuccess("");
+                setLastSubmittedAppointmentType("");
+              }}
               disabled={isSubmitting}
               className="accent-blue-600"
             />
@@ -201,7 +336,7 @@ function AppointmentForm() {
             name="patientCode"
             value={patientCode}
             onChange={(event) => {
-              setPatientCode(event.target.value);
+              setPatientCode(sanitizePatientCode(event.target.value));
               setError("");
               setSuccess("");
             }}
@@ -214,6 +349,7 @@ function AppointmentForm() {
         </label>
       )}
 
+      {patientMode === "new" && (
       <div className="grid gap-5 sm:grid-cols-2">
         <label className="space-y-2 text-sm font-medium text-slate-700">
           First Name
@@ -222,6 +358,9 @@ function AppointmentForm() {
             name="firstName"
             value={formData.firstName}
             onChange={(event) => handleChange("firstName", event.target.value)}
+            minLength={2}
+            maxLength={60}
+            autoComplete="given-name"
             required
             className="w-full rounded-lg border border-slate-300 px-3 py-2.5 font-normal text-slate-900 outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
           />
@@ -234,6 +373,9 @@ function AppointmentForm() {
             name="lastName"
             value={formData.lastName}
             onChange={(event) => handleChange("lastName", event.target.value)}
+            minLength={2}
+            maxLength={60}
+            autoComplete="family-name"
             required
             className="w-full rounded-lg border border-slate-300 px-3 py-2.5 font-normal text-slate-900 outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
           />
@@ -246,6 +388,9 @@ function AppointmentForm() {
             name="phone"
             value={formData.phone}
             onChange={(event) => handleChange("phone", event.target.value)}
+            placeholder="03001234567"
+            autoComplete="tel"
+            inputMode="tel"
             required
             className="w-full rounded-lg border border-slate-300 px-3 py-2.5 font-normal text-slate-900 outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
           />
@@ -253,16 +398,24 @@ function AppointmentForm() {
 
         <label className="space-y-2 text-sm font-medium text-slate-700">
           City
-          <input
-            type="text"
+          <select
             name="city"
             value={formData.city}
-            onChange={(event) => handleChange("city", event.target.value)}
+            onChange={(event) => {
+              handleChange("city", event.target.value);
+            }}
             required
-            className="w-full rounded-lg border border-slate-300 px-3 py-2.5 font-normal text-slate-900 outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
-          />
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 font-normal text-slate-900 outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+          >
+            <option value="" disabled>Select your city</option>
+            {cities.map((city) => <option key={city} value={city}>{city}</option>)}
+          </select>
         </label>
 
+      </div>
+      )}
+
+      <div className="grid gap-5 sm:grid-cols-2">
         <label className="space-y-2 text-sm font-medium text-slate-700 sm:col-span-2">
           Appointment Type
           <select
@@ -291,11 +444,25 @@ function AppointmentForm() {
             onChange={(event) =>
               handleChange("preferredDate", event.target.value)
             }
+            min={pakistanToday()}
             required
             className="w-full rounded-lg border border-slate-300 px-3 py-2.5 font-normal text-slate-900 outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
           />
         </label>
       </div>
+
+      {lastSubmittedAppointmentType === "Online Consultation" && (
+        <div role="note" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
+          <p>Your booking form has been submitted successfully.</p>
+          <p className="mt-2">
+            Your appointment confirmation will only be completed after you send your payment screenshot on WhatsApp:{" "}
+            <a href="https://wa.me/923001234567" target="_blank" rel="noreferrer" className="inline-block whitespace-nowrap font-bold text-emerald-800 underline underline-offset-2">
+              03001234567
+            </a>.
+          </p>
+          <p className="mt-2">After payment verification, your booking confirmation message will be sent to your WhatsApp number.</p>
+        </div>
+      )}
 
       {error && (
         <p role="alert" className="text-sm text-red-600">
@@ -303,7 +470,7 @@ function AppointmentForm() {
         </p>
       )}
 
-      {success && (
+      {success && lastSubmittedAppointmentType !== "Online Consultation" && (
         <p role="status" className="text-sm text-green-700">
           {success}
         </p>

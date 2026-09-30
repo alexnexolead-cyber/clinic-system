@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import PatientFields from "@/src/components/patients/PatientFields";
+import { isAllowedPakistanCity, isValidPakistanMobile, isValidPersonName, normalizePakistanPhone, sanitizePersonName } from "@/lib/patient-validation";
 import { supabase } from "@/lib/supabase";
 import type { Patient, PatientAttributes } from "@/types/patient";
 
@@ -44,11 +45,24 @@ export default function PatientCreationForm() {
 
   async function createPatient() {
     setError("");
+    if (!isValidPersonName(values.first_name) || !isValidPersonName(values.last_name)) {
+      setError("Enter valid first and last names using letters and spaces only.");
+      return;
+    }
+    if (!isValidPakistanMobile(values.phone)) {
+      setError("Enter a valid Pakistan mobile number, for example 03001234567 or +923001234567.");
+      return;
+    }
+    if (!isAllowedPakistanCity(values.city)) {
+      setError("Choose a city from the list.");
+      return;
+    }
+
     setIsCreating(true);
     const attributes: PatientAttributes = {
-      first_name: values.first_name.trim(),
-      last_name: values.last_name.trim(),
-      phone: values.phone.trim(),
+      first_name: sanitizePersonName(values.first_name),
+      last_name: sanitizePersonName(values.last_name),
+      phone: normalizePakistanPhone(values.phone),
       city: values.city.trim(),
     };
 
@@ -72,11 +86,25 @@ export default function PatientCreationForm() {
     event.preventDefault();
     setError("");
     setMatches([]);
+
+    if (!isValidPersonName(values.first_name) || !isValidPersonName(values.last_name)) {
+      setError("Enter valid first and last names using letters and spaces only.");
+      return;
+    }
+    if (!isValidPakistanMobile(values.phone)) {
+      setError("Enter a valid Pakistan mobile number, for example 03001234567 or +923001234567.");
+      return;
+    }
+    if (!isAllowedPakistanCity(values.city)) {
+      setError("Choose a city from the list.");
+      return;
+    }
+
     setIsChecking(true);
 
     const firstName = values.first_name.trim();
     const lastName = values.last_name.trim();
-    const phone = values.phone.trim();
+    const phone = normalizePakistanPhone(values.phone);
 
     const [phoneResult, nameResult] = await Promise.all([
       supabase.from("patients").select(matchSelect).eq("phone", phone),

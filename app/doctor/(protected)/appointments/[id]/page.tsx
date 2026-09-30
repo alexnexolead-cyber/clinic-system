@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import AppointmentCard from "@/src/components/appointments/AppointmentCard";
 import { getOrCreateVisitForAppointment } from "@/lib/clinical-visits";
 import { supabase } from "@/lib/supabase";
+import { getPaymentStatus } from "@/types/operations";
 import type { AppointmentDetailRecord, AppointmentStatus } from "@/types/appointment";
 import type { Patient } from "@/types/patient";
 
@@ -22,6 +23,15 @@ export default function AppointmentDetailPage() {
   const [isLoading, setIsLoading] = useState(hasValidAppointmentId);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isStartingVisit, setIsStartingVisit] = useState(false);
+  const [isViewingVisit, setIsViewingVisit] = useState(false);
+  const [paymentSummary, setPaymentSummary] = useState<{
+    totalCharges: number;
+    totalPaid: number;
+    remainingBalance: number;
+    status: ReturnType<typeof getPaymentStatus>;
+  } | null>(null);
+  const [isLoadingPayment, setIsLoadingPayment] = useState(hasValidAppointmentId);
+  const [paymentError, setPaymentError] = useState("");
   const [error, setError] = useState(
     hasValidAppointmentId ? "" : "Invalid appointment ID.",
   );
@@ -97,6 +107,54 @@ export default function AppointmentDetailPage() {
 
       setAppointment(appointment);
       setPatient(loadedPatient);
+      const { data: linkedVisit, error: linkedVisitError } = await supabase
+        .from("visits")
+        .select("id")
+        .eq("appointment_id", appointment.id)
+        .maybeSingle();
+
+      if (linkedVisitError) {
+        setPaymentError(linkedVisitError.message);
+      }
+
+      const appointmentEntriesResult = await supabase
+        .from("ledger_entries")
+        .select("id, entry_type, amount")
+        .eq("appointment_id", appointment.id);
+
+      if (appointmentEntriesResult.error) {
+        setPaymentError(appointmentEntriesResult.error.message);
+      } else {
+        const linkedVisitEntriesResult = linkedVisit?.id
+          ? await supabase
+              .from("ledger_entries")
+              .select("id, entry_type, amount")
+              .eq("visit_id", linkedVisit.id)
+          : { data: [], error: null };
+
+        if (linkedVisitEntriesResult.error) {
+          setPaymentError(linkedVisitEntriesResult.error.message);
+        } else {
+          const entries = new Map(
+            [...(appointmentEntriesResult.data ?? []), ...(linkedVisitEntriesResult.data ?? [])]
+              .map((entry) => [entry.id, entry]),
+          );
+          const totals = [...entries.values()].reduce(
+            (summary, entry) => {
+              if (entry.entry_type === "charge") summary.totalCharges += Number(entry.amount);
+              else summary.totalPaid += Number(entry.amount);
+              return summary;
+            },
+            { totalCharges: 0, totalPaid: 0 },
+          );
+          setPaymentSummary({
+            ...totals,
+            remainingBalance: Math.max(0, totals.totalCharges - totals.totalPaid),
+            status: getPaymentStatus(totals.totalCharges, totals.totalPaid),
+          });
+        }
+      }
+      setIsLoadingPayment(false);
       setIsLoading(false);
     }
 
@@ -159,6 +217,27 @@ export default function AppointmentDetailPage() {
     router.push(`/doctor/visits/${result.visitId}`);
   }
 
+  async function handleViewVisit() {
+    if (!appointment) {
+      return;
+    }
+
+    setError("");
+    setIsViewingVisit(true);
+    const { data: visit, error: visitError } = await supabase
+      .from("visits")
+      .select("id")
+      .eq("appointment_id", appointment.id)
+      .maybeSingle();
+
+    if (visitError || !visit) {
+      setError(visitError?.message ?? "No visit is linked to this appointment.");
+      setIsViewingVisit(false);
+      return;
+    }
+    router.push(`/doctor/visits/${visit.id}`);
+  }
+
   return (
     <section className="mx-auto w-full max-w-5xl px-5 py-8 sm:px-8 lg:px-10 lg:py-10">
       <Link
@@ -206,6 +285,11 @@ export default function AppointmentDetailPage() {
             onStatusChange={handleStatusChange}
             isStartingVisit={isStartingVisit}
             onStartVisit={handleStartVisit}
+            isViewingVisit={isViewingVisit}
+            onViewVisit={handleViewVisit}
+            paymentSummary={paymentSummary}
+            isLoadingPayment={isLoadingPayment}
+            paymentError={paymentError}
           />
         </div>
       )}
